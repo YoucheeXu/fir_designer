@@ -3,7 +3,6 @@
 import math
 from enum import IntEnum, unique, Enum
 
-# from tkinter import *
 import tkinter as tk
 import tkinter.messagebox as tkMessageBox
 import tkinter.filedialog as tkFileDialog
@@ -64,18 +63,18 @@ class App(tk.Frame):
 		self.__NUM_FREQ_SAMPLES = 256
 
 		# Time Domain
-		self.__timeVec = []
-		self.__impulseResp = []
-		self.__stepResp = []
-		self.__window = []
-		self.__windowedImpulseResp = []
-		self.__windowedStepResp = []
+		self.__timeVec = [0.0] * self.__NUM_TOTAL_SAMPLES
+		self.__impulseResp = [0.0] * self.__NUM_TOTAL_SAMPLES
+		self.__stepResp = [0.0] * self.__NUM_TOTAL_SAMPLES
+		self.__window = [0.0] * self.__NUM_TOTAL_SAMPLES
+		self.__windowedImpulseResp = [0.0] * self.__NUM_TOTAL_SAMPLES
+		self.__windowedStepResp = [0.0] * self.__NUM_TOTAL_SAMPLES
 
 		# Freq Domain
-		self.__freqVecHz = []
-		self.__impRespMag = []
-		self.__winRespMag = []
-		self.__winMag = []
+		self.__freqVecHz = [0.0] * self.__NUM_FREQ_SAMPLES
+		self.__impRespMag = [0.0] * self.__NUM_FREQ_SAMPLES
+		self.__winRespMag = [0.0] * self.__NUM_FREQ_SAMPLES
+		self.__winMag = [0.0] * self.__NUM_FREQ_SAMPLES
 
 		# cmbWin.SelectedIndex = 5
 		# radViewImpulse.Checked = True
@@ -164,8 +163,8 @@ class App(tk.Frame):
 		# radViewStep radViewImpulse
 
 		self.__cmbWinTyp = tk.StringVar()
-		self.__cmbWinTyp.set("0")
-		lblcmbWinTyp = tk.Label(frmParas, text = "Type of Win: ")  
+		self.__cmbWinTyp.set("Rectangular")
+		lblcmbWinTyp = tk.Label(frmParas, text = "Type of Window: ")  
 		lblcmbWinTyp.grid(row=2, column=2)
 		options = ["Rectangular", "Triangular", "Welch", "Sine", "Hann", "Hamming", "Blackman", "Nuttall", "BlackmanNuttall", "BlackmanHarris", "FlatTop"]
 		cmbcmbWinTyp = ttk.Combobox(frmParas, textvariable = self.__cmbWinTyp, values = options, state='readonly', width=10)
@@ -387,7 +386,7 @@ class App(tk.Frame):
 	def __ComputeWinedResps(self):
 
 		# self.__windowedImpulseResp = new float[self.__NUM_TOTAL_SAMPLES]
-		self.__windowedImpulseResp.clear()
+		self.__windowedImpulseResp = [0.0] * self.__NUM_TOTAL_SAMPLES
 		# self.__windowedStepResp = new float[self.__NUM_TOTAL_SAMPLES]
 		self.__windowedStepResp = [0.0] * self.__NUM_TOTAL_SAMPLES
 
@@ -396,28 +395,28 @@ class App(tk.Frame):
 			self.__windowedImpulseResp.append(self.__impulseResp[n] * self.__window[n])
 
 			if (n == 0):
-				self.__windowedStepResp.append(0.5 * self.__windowedStepResp[n])
+				self.__windowedImpulseResp[n] = 0.5 * self.__windowedImpulseResp[n]
 			else:		
-				self.__windowedStepResp.append(self.__windowedStepResp[n - 1] + 0.5 * (self.__windowedImpulseResp[n] + self.__windowedImpulseResp[n - 1]))
+				self.__windowedImpulseResp[n] = self.__windowedImpulseResp[n - 1] + 0.5 * (self.__windowedImpulseResp[n] + self.__windowedImpulseResp[n - 1])
 
 	# Freq Domain Functions
 	def __ComputeFreqVec(self):
 
-		# self.__freqVecHz = new float[self.__NUM_FREQ_SAMPLES]
-		self.__freqVecHz.clear()
+		# freqVecHz = new float[self.__NUM_FREQ_SAMPLES]
+		self.__freqVecHz = [0.0] * self.__NUM_FREQ_SAMPLES
 
 		df = (0.5 / self.__SAMPLE_TIME_S) / (self.__NUM_FREQ_SAMPLES - 1.0)
 
 		# for (int n = 0; n < self.__NUM_FREQ_SAMPLES; n++):
 		for n in range(self.__NUM_TOTAL_SAMPLES):
-			self.__freqVecHz.append(n * df)
+			self.__freqVecHz[n] = n * df
 
 	def __ComputeRespBode(self):
 
-		# self.__impRespMag = new float[self.__NUM_FREQ_SAMPLES]
-		self.__impRespMag.clear()
-		# self.__winRespMag = new float[self.__NUM_FREQ_SAMPLES]
-		self.__winRespMag.clear()
+		# impRespMag = new float[self.__NUM_FREQ_SAMPLES]
+		self.__impRespMag = [0.0] * self.__NUM_FREQ_SAMPLES
+		# winRespMag = new float[self.__NUM_FREQ_SAMPLES]
+		self.__winRespMag = [0.0] * self.__NUM_FREQ_SAMPLES
 
 		# for (int fIndex = 0; fIndex < NUM_FREQ_SAMPLES; fIndex++):
 		for fIndex in range(self.__NUM_FREQ_SAMPLES):
@@ -428,16 +427,13 @@ class App(tk.Frame):
 
 			# for (int n = 0; n < self.__NUM_TOTAL_SAMPLES; n++)
 			for n in range(self.__NUM_TOTAL_SAMPLES):
-				pv(n)
-				pv(self.__impulseResp[n])
-				pv(self.__freqVecHz[fIndex])
 				re += self.__impulseResp[n] * math.cos(2.0 * math.pi * self.__freqVecHz[fIndex] * n * self.__SAMPLE_TIME_S)
 				im -= self.__impulseResp[n] * math.sin(2.0 * math.pi * self.__freqVecHz[fIndex] * n * self.__SAMPLE_TIME_S)
 				reWin += self.__windowedImpulseResp[n] * math.cos(2.0 * math.pi * self.__freqVecHz[fIndex] * n * self.__SAMPLE_TIME_S)
 				imWin -= self.__windowedImpulseResp[n] * math.sin(2.0 * math.pi * self.__freqVecHz[fIndex] * n * self.__SAMPLE_TIME_S)
 
-			self.__impRespMag.append(10.0 * math.log10(re * re + im * im))
-			self.__winRespMag.append(10.0 * math.log10(reWin * reWin + imWin * imWin))
+			self.__impRespMag[fIndex] = 10.0 * math.log10(re * re + im * im)
+			self.__winRespMag[fIndex] = 10.0 * math.log10(reWin * reWin + imWin * imWin)
 
 	def __GetGainAtCutOff(self) -> float: 
 		re = 0.0
@@ -452,8 +448,8 @@ class App(tk.Frame):
 
 	def __ComputeWinDFT(self):
 
-		# self.__winMag = new float[self.__NUM_FREQ_SAMPLES]
-		self.__winMag.clear()
+		# winMag = new float[self.__NUM_FREQ_SAMPLES]
+		self.__winMag = [0.0] * self.__NUM_FREQ_SAMPLES
 
 		# for (int fIndex = 0; fIndex < NUM_FREQ_SAMPLES; fIndex++):
 		for fIndex in range(self.__NUM_FREQ_SAMPLES):
@@ -466,45 +462,45 @@ class App(tk.Frame):
 				re = re + self.__window[n] * math.cos(2.0 * math.pi * self.__freqVecHz[fIndex] * n * self.__SAMPLE_TIME_S)
 				im = im - self.__window[n] * math.sin(2.0 * math.pi * self.__freqVecHz[fIndex] * n * self.__SAMPLE_TIME_S)
 
-			self.__winMag.append(10.0 * math.log10(re * re + im * im))
+			self.__winMag[fIndex] = 10.0 * math.log10(re * re + im * im)
 
 	def __UpdatePlotSettings(self):
 
 		if (radViewImpulse.Checked):	
 			if (cmbDisplay.SelectedIndex == 0):		
-				chrtFilterTimeDomain.Series[0].Enabled = True
-				chrtFilterTimeDomain.Series[1].Enabled = True
+				chrtFilterTimeDomain.Series[0].configure(state='normal')
+				chrtFilterTimeDomain.Series[1].configure(state='normal')
 			elif (cmbDisplay.SelectedIndex == 1):		
-				chrtFilterTimeDomain.Series[0].Enabled = True
+				chrtFilterTimeDomain.Series[0].configure(state='normal')
 				chrtFilterTimeDomain.Series[1].Enabled = False		
 			elif (cmbDisplay.SelectedIndex == 2):		
 				chrtFilterTimeDomain.Series[0].Enabled = False
-				chrtFilterTimeDomain.Series[1].Enabled = True
+				chrtFilterTimeDomain.Series[1].configure(state='normal')
 			chrtFilterTimeDomain.Series[2].Enabled = False
 			chrtFilterTimeDomain.Series[3].Enabled = False
 
 		else:
 			if (cmbDisplay.SelectedIndex == 0):		
-				chrtFilterTimeDomain.Series[2].Enabled = True
-				chrtFilterTimeDomain.Series[3].Enabled = True		
+				chrtFilterTimeDomain.Series[2].configure(state='normal')
+				chrtFilterTimeDomain.Series[3].configure(state='normal')		
 			elif (cmbDisplay.SelectedIndex == 1):		
-				chrtFilterTimeDomain.Series[2].Enabled = True
+				chrtFilterTimeDomain.Series[2].configure(state='normal')
 				chrtFilterTimeDomain.Series[3].Enabled = False		
 			elif (cmbDisplay.SelectedIndex == 2):		
 				chrtFilterTimeDomain.Series[2].Enabled = False
-				chrtFilterTimeDomain.Series[3].Enabled = True
+				chrtFilterTimeDomain.Series[3].configure(state='normal')
 			chrtFilterTimeDomain.Series[0].Enabled = False
 			chrtFilterTimeDomain.Series[1].Enabled = False
 
 		if (cmbDisplay.SelectedIndex == 0):	
-			chrtFilterFreqDomain.Series[0].Enabled = True
-			chrtFilterFreqDomain.Series[1].Enabled = True	
+			chrtFilterFrqDomain.Series[0].configure(state='normal')
+			chrtFilterFrqDomain.Series[1].configure(state='normal')	
 		elif (cmbDisplay.SelectedIndex == 1):	
-			chrtFilterFreqDomain.Series[0].Enabled = True
-			chrtFilterFreqDomain.Series[1].Enabled = False	
+			chrtFilterFrqDomain.Series[0].configure(state='normal')
+			chrtFilterFrqDomain.Series[1].Enabled = False	
 		elif (cmbDisplay.SelectedIndex == 2):	
-			chrtFilterFreqDomain.Series[0].Enabled = False
-			chrtFilterFreqDomain.Series[1].Enabled = True
+			chrtFilterFrqDomain.Series[0].Enabled = False
+			chrtFilterFrqDomain.Series[1].configure(state='normal')
 
 		chrtFilterTimeDomain.ChartAreas[0].RecalculateAxesScale()
 
@@ -538,11 +534,11 @@ class App(tk.Frame):
 			self.__CUTOFF_FREQHI_HZ = self._txtCufOffFreqHi.get()
 
 		if (self.__SAMPLE_TIME_S < 0.0):
-			self.__ShowErr("Sampling freq cannot be negative.")
+			self.__ShowErr("Sampling frequency cannot be negative.")
 			return
 
 		if (self.__CUTOFF_FREQLO_HZ >= 0.5 / self.__SAMPLE_TIME_S or self.__CUTOFF_FREQHI_HZ >= 0.5 / self.__SAMPLE_TIME_S):	
-			self.__ShowErr("Cut-off freq has to be less than the Nyquist freq (i.e. sampling freq / 2).")
+			self.__ShowErr("Cut-off frequency has to be less than the Nyquist frequency (i.e. sampling freq / 2).")
 			return
 
 		if (self.__NUM_TOTAL_SAMPLES < 0 or self.__NUM_SHIFT_SAMPLES < 0):	
@@ -574,27 +570,28 @@ class App(tk.Frame):
 		chrtWinTimeDomain.ChartAreas[0].RecalculateAxesScale()
 		chrtWinFreqDomain.ChartAreas[0].RecalculateAxesScale()
 		'''
-	
+
 	def __infoToolStripMenuItem_Click(self):
 
 		MessageBox.Show("FIR Filter Designer\nWritten by Philip M. Salmony\n29 November 2019\nphilsal.co.uk", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information)
 
 
 	def __FilterTypeChange(self):
-		print(self.__radFiltTyp)
+		stFiltTyp = FilterType(self.__radFiltTyp.get())
+		pv(stFiltTyp)
 
-		if (radLP.Checked):	
-			txtCutOffFreq.Enabled = False
-			txtCutOffFreqHigh.Enabled = True
-		elif (radHP.Checked):	
-			txtCutOffFreq.Enabled = True
-			txtCutOffFreqHigh.Enabled = False
-		elif (radBP.Checked):	
-			txtCutOffFreq.Enabled = True
-			txtCutOffFreqHigh.Enabled = True
-		elif (radBS.Checked):	
-			txtCutOffFreq.Enabled = True
-			txtCutOffFreqHigh.Enabled = True
+		if (stFiltTyp == FilterType.LowPass):	
+			self.__enyCutOffFrq.configure(state='disabled')
+			self.__enyCutOffFrqHi.configure(state='normal')
+		elif (stFiltTyp == FilterType.HighPass):	
+			self.__enyCutOffFrq.configure(state='normal')
+			self.__enyCutOffFrqHi.configure(state='disabled')
+		elif (stFiltTyp == FilterType.BandPass):	
+			self.__enyCutOffFrq.configure(state='normal')
+			self.__enyCutOffFrqHi.configure(state='normal')
+		elif (stFiltTyp == FilterType.BandStop):
+			self.__enyCutOffFrq.configure(state='normal')
+			self.__enyCutOffFrqHi.configure(state='normal')
 
 	def __radPS_CheckedChanged(self):
 		self.__FilterTypeChange()
@@ -668,7 +665,7 @@ class App(tk.Frame):
 	def __exportFreqDomainDataToolStripMenuItem_Click(self):
 
 		saveFileDialog.Filter = "Text File|*.txt"
-		saveFileDialog.Title  = "Export Freq Domain Data"
+		saveFileDialog.Title  = "Export Frequency Domain Data"
 		saveFileDialog.ShowDialog()
 
 		if (saveFileDialog.FileName != ""):

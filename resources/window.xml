@@ -1,0 +1,35 @@
+<Window Title="FIR Designer" Height="1200" Width="540">
+	<Frame text="Time Domain" layout="pack" pos="top" xPad="10" yPad="(10,5)">
+		<MatPlot text="Filter Response in Time Domain" xLabel="Time (s)" yLabel="" layout="pack" pos="left" xPad="(10,5)" yPad="5"/>
+		<MatPlot text="Window Function in Time Domain" xLabel="Time (s)" yLabel="" layout="pack" pos="left" xPad="(5,10)" yPad="5"/>
+	</Frame>
+	<Frame text="Frequency Domain" layout ="pack" pos="top" xPad="10" yPad="(5,5)">
+		<MatPlot text="Filter Frequency Response" xLabel="Frequency (Hz)"          yLabel="" layout="pack" pos="left" xPad="(10,5)" yPad="5"/>
+		<MatPlot text="Window Function Frequency Response" xLabel="Frequency (Hz)" yLabel="" layout="pack" pos="left" xPad="(5,10)" yPad="(5,5)"/>
+	</Frame>
+	<LabelFrame text="Parameters" layout="pack" pos="left" xPad="(10,5)" yPad="(5,10)">
+		<Label text="Sample Time(s):" layout="grid"      			pos="(0,0)"/>
+		<Entry text="Sample Time" width="15" layout="grid" 	pos="(0,1)"/>
+		<Label text="Filter Length:" layout="grid" pos="(1,0)"/>
+		<Entry text="Filter Length" width="15" layout="grid"	pos="(1,1)"/>
+		<Label text="Shift Samples:" layout="grid" 			pos="(2,0)"/>
+		<Entry text="Shift Samples" width="15" layout="grid" 	pos="(2,1)"/>
+		<Label text="Low Frequency(Hz):" layout="grid" 		pos="(0,2)"/>
+		<Entry text="Low Frequency" width="15" layout="grid" 	pos="(0,3)"/>
+		<Label text="High Frequency(Hz):" layout="grid" 		pos="(1,2)"/>
+		<Entry text="High Frequency" width="15" layout="grid" 	pos="(1,3)"/>
+		<Label text="Window Function:" layout="grid" 			pos="(2,2)"/>
+		<Combobox text="Window Type" values='["Rectangular", "Triangular", "Welch", "Sine", "Hann", "Hamming", "Blackman", "Nuttall", "BlackmanNuttall", "BlackmanHarris", "FlatTop"]' state='readonly' default="5" width="15" layout="grid" pos="(2,3)"/>
+		<Label text="Filter Type" layout="grid" 				pos="(0,4)"/>
+		<Radiobutton title="Low Pass"  text="Filter Type" value="0" layout="grid" 	pos="(1,4)"/>
+		<Radiobutton title="High Pass" text="Filter Type" value="1" layout="grid" 	pos="(1,5)"/>
+		<Radiobutton title="Band Pass" text="Filter Type" value="2" layout="grid" 	pos="(2,4)"/>
+		<Radiobutton title="Band Stop" text="Filter Type" value="3" layout="grid" 	pos="(2,5)"/>
+		<Label text="Response Plot:" 				layout="grid"	pos="(0,6)"/>
+		<Radiobutton title="Impulse"	text="Response Plot" value="0" layout="grid" 	pos="(0,7)"/>
+		<Radiobutton title="Step"		text="Response Plot" value="1" layout="grid"	pos="(1,7)"/>
+		<Label text="Display:" layout="grid" 					pos="(2,6)"/>
+		<Combobox text="Display Type" values='["Both", "Raw Only", "Win Only"]' state='readonly' default="0" width="15" layout="grid" pos="(2,7)"/>
+	</LabelFrame>
+	<Button text="Design Filter" layout="pack" pos="left" xPad="(5,10)" yPad="(5,10)"/>
+</Window>

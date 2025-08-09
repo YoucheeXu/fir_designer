@@ -1,6 +1,18 @@
-<Window Title="FIR Designer" Width="1180" Height="700">
+<Window Title="FIR Designer" Width="1024" Height="768">
+	<Menu DockPanel.Dock="Top" text="Menubar">
+		<MenuItem Header="File" options="{'underline':0}">
+			<MenuItem Command="Export Coefficients..."/>
+			<MenuItem Command="Export Time Domain Data..."/>
+			<MenuItem Command="Export Frequency Domain Data..."/>
+			<Separator/>
+			<MenuItem Command="Quit" options="{'accelerator':'Ctrl+Q','underline':0}"/>
+		</MenuItem>
+		<MenuItem Header="Help" options="{'underline':0}">
+			<MenuItem Command="Info"/>
+		</MenuItem>
+	</Menu>
 	<Frame text="Time Domain" layout="pack" pack='{"side":"top","fill":"both","expand":True,"padx":10,"pady":(10,5)}'>
-		<MatPlot text="Filter Response in Time Domain" xLabel="Time (s)" yLabel="" layout="pack" pack='{"side":"left","fill":"both","expand":True,"padx":(0,5),"pady":0}'/>
+		<MatPlot text="Filter Response in Time Domain" size="(480,180)" xLabel="Time (s)" yLabel="" layout="pack" pack='{"side":"left","fill":"both","expand":True,"padx":(0,5),"pady":0}'/>
 		<MatPlot text="Window Function in Time Domain" xLabel="Time (s)" yLabel="" layout="pack" pack='{"side":"left","fill":"both","expand":True,"padx":(5,0),"pady":0}'/>
 	</Frame>
 	<Frame text="Frequency Domain" layout ="pack" pack='{"side":"top","fill":"both","expand":True,"padx":10,"pady":(5,5)}'>
@@ -9,27 +21,27 @@
 	</Frame>
 	<LabelFrame text="Parameters" layout="pack" pack='{"side":"left","fill":"both","expand":True,"padx":(10,5),"pady":(5,10)}' childOpt="{'padx':10,'pady':5}">
 		<Label text="Sample Time(s):" layout="grid" grid="{'row':0,'column':0}"/>
-		<Entry text="Sample Time" tooltip="Unit is second" width="15" layout="grid" grid="{'row':0,'column':1}"/>
+		<Entry text="Sample Time" tooltip="Unit is second" options="{'width':15}" layout="grid" grid="{'row':0,'column':1}"/>
 		<Label text="Filter Length:" layout="grid" grid="{'row':1,'column':0}"/>
-		<Entry text="Filter Length" width="15" layout="grid" grid="{'row':1,'column':1}"/>
+		<Entry text="Filter Length" options="{'width':15}" layout="grid" grid="{'row':1,'column':1}"/>
 		<Label text="Shift Samples:" layout="grid" grid="{'row':2,'column':0}"/>
-		<Entry text="Shift Samples" width="15" layout="grid" grid="{'row':2,'column':1}"/>
+		<Entry text="Shift Samples" options="{'width':15}" layout="grid" grid="{'row':2,'column':1}"/>
 		<Label text="Low Frequency(Hz):" layout="grid" grid="{'row':0,'column':2}"/>
-		<Entry text="Low Frequency" width="15" layout="grid" grid="{'row':0,'column':3}"/>
+		<Entry text="Low Frequency" options="{'width':15}" layout="grid" grid="{'row':0,'column':3}"/>
 		<Label text="High Frequency(Hz):" layout="grid" grid="{'row':1,'column':2}"/>
-		<Entry text="High Frequency" width="15" layout="grid" grid="{'row':1,'column':3}"/>
+		<Entry text="High Frequency" options="{'width':15}" layout="grid" grid="{'row':1,'column':3}"/>
 		<Label text="Window Function:" layout="grid" grid="{'row':2,'column':2}"/>
 		<Combobox text="Window Type" default="5" options="{'values':['Rectangular', 'Triangular', 'Welch', 'Sine', 'Hann', 'Hamming', 'Blackman', 'Nuttall', 'BlackmanNuttall', 'BlackmanHarris', 'FlatTop'],'state':'readonly','width':15}" layout="grid" grid="{'row':2,'column':3}"/>
 		<RadiobuttonGroup text="Filter Type" options="{'labelanchor':'n'}" layout="grid" grid="{'row':0,'column':4,'rowspan':3,'columnspan':2}">
-			<Radiobutton title="Low Pass"  value="0" layout="grid" grid="{'row':0,'column':1,'sticky':'w'}"/>
-			<Radiobutton title="High Pass" value="1" layout="grid" grid="{'row':0,'column':2,'sticky':'w'}"/>
-			<Radiobutton title="Band Pass" value="2" layout="grid" grid="{'row':1,'column':1,'sticky':'w'}"/>
-			<Radiobutton title="Band Stop" value="3" layout="grid" grid="{'row':1,'column':2,'sticky':'w'}"/>
+			<Radiobutton text="Low Pass"  value="0" layout="grid" grid="{'row':0,'column':1,'sticky':'w'}"/>
+			<Radiobutton text="High Pass" value="1" layout="grid" grid="{'row':0,'column':2,'sticky':'w'}"/>
+			<Radiobutton text="Band Pass" value="2" layout="grid" grid="{'row':1,'column':1,'sticky':'w'}"/>
+			<Radiobutton text="Band Stop" value="3" layout="grid" grid="{'row':1,'column':2,'sticky':'w'}"/>
 		</RadiobuttonGroup>
 		<RadiobuttonGroup text="Response Plot" options="{'labelanchor':'w'}" layout="grid" grid="{'row':0,'column':6,'rowspan':2,'columnspan':2}">
-			<Radiobutton title="Impulse" value="0" layout="grid" grid="{'row':0,'column':1,'sticky':'w'}"/>
-			<Radiobutton title="Step" 	value="1" layout="grid" grid="{'row':1,'column':1,'sticky':'w'}"/>
-		</RadiobuttonGroup>
+			<Radiobutton text="Impulse" value="0" layout="grid" grid="{'row':0,'column':1,'sticky':'w'}"/>
+			<Radiobutton text="Step" 	value="1" layout="grid" grid="{'row':1,'column':1,'sticky':'w'}"/>
+		</RadiobuttonGroup>		
 		<Label text="Display:" layout="grid" grid="{'row':2,'column':6}"/>
 		<Combobox text="Display Type" default="0" options="{'values':['Both', 'Raw Only', 'Win Only'],'state':'readonly','width':15}" layout="grid" grid="{'row':2,'column':7}"/>
 	</LabelFrame>

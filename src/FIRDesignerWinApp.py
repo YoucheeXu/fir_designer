@@ -3,15 +3,18 @@
 import sys
 import os
 import math
-from enum import IntEnum, unique, Enum
-
-import tkinter.filedialog as tkFileDialog
+from enum import IntEnum, unique
+from typing import override, cast
 
 import numpy as np
+from tkinter import filedialog as tkFileDialog
+# import tkinter as tk
 
 from pyutilities.logit import pv
-from pyutilities.matplot import LineData
+from pyutilities.tkwin import EntryCtrl, RadioButtonGroupCtrl, ComboboxCtrl
 from pyutilities.tkwin import tkWin
+from pyutilities.matplot import MatPlotCtrl
+from pyutilities.matplot import LineData
 
 
 _ = np.seterr(divide='ignore', invalid='ignore')
@@ -33,7 +36,7 @@ class WinType(IntEnum):
 
 
 @unique
-class FilrType(Enum):
+class FilrType(IntEnum):
     LowPass = 0
     HighPass = 1
     BandPass = 2
@@ -41,582 +44,609 @@ class FilrType(Enum):
 
 
 @unique
-class RespPltType(Enum):
+class RespPltType(IntEnum):
     Impulse = 0
     Step = 1
 
 
 class FIRDesignerApp(tkWin):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, cur_path: str, xmlfile: str):
+        super().__init__(cur_path, xmlfile)
+        self._win_typ: str = ""
 
         # Initial settings
-        self.__numFreqSample = 256
+        self._freq_sample_num: int = 256
 
-        # cmbWin.SelectedIndex = 5
-        # radViewImpulse.Checked = True
-        # cmbDisplay.SelectedIndex = 0
-
-    def init_paras(self):
-        self._txtSampleTime = self.get_control("SampleTime")
-        self._txtSampleTime.set_text("0.01")
-        self._txtLowFrequency = self.get_control("LowFrequency")
-        self._txtLowFrequency.set_text("10.0")
-        self._txtHighFrequency = self.get_control("HighFrequency")
-        self._txtHighFrequency.set_text("20.0")
-        self._txtFilterLength = self.get_control("FilterLength")
-        self._txtFilterLength.set_text("64")
-        self._txtShiftSamples = self.get_control("ShiftSamples")
-        self._txtShiftSamples.set_text("32")
-        self._cmbWindowType = self.get_control("WindowType")
-        self._cmbWindowType.set_text("Hamming")
-        self._radFilterType = self.get_control("FilterType")
-        self._radFilterType.set_text(0)	# FilrType.LowPass
-        self._radResponsePlot = self.get_control("ResponsePlot")
-        self._radResponsePlot.set_text(0)	# Impulse
-        self._cmbDisplayType = self.get_control("DisplayType")
-        self._cmbDisplayType.set_text("Both")		
+        self._txt_sample_time: EntryCtrl = cast(EntryCtrl, self.get_control("SampleTime"))
+        self._txt_sample_time.set_val("0.01")
+        self._txt_low_freq: EntryCtrl = cast(EntryCtrl, self.get_control("LowFrequency"))
+        self._txt_low_freq.set_val("10.0")
+        self._txt_high_freq: EntryCtrl = cast(EntryCtrl, self.get_control("HighFrequency"))
+        self._txt_high_freq.set_val("20.0")
+        self._txt_filter_len: EntryCtrl = cast(EntryCtrl, self.get_control("FilterLength"))
+        self._txt_filter_len.set_val("64")
+        self._txt_shift_samples: EntryCtrl = cast(EntryCtrl, self.get_control("ShiftSamples"))
+        self._txt_shift_samples.set_val("32")
+        self._cmb_win_typ: ComboboxCtrl = cast(ComboboxCtrl, self.get_control("WindowType"))
+        self._cmb_win_typ.set_val("Hamming")
+        self._rad_filt_typ: RadioButtonGroupCtrl = cast(RadioButtonGroupCtrl, self.get_control("FilterType"))
+        self._rad_filt_typ.set_val(0)    # FilrType.LowPass
+        self._rad_resp_plot: RadioButtonGroupCtrl = cast(RadioButtonGroupCtrl, self.get_control("ResponsePlot"))
+        self._rad_resp_plot.set_val(0)    # Impulse
+        self._cmb_display_typ: ComboboxCtrl = cast(ComboboxCtrl, self.get_control("DisplayType"))
+        self._cmb_display_typ.set_val("Both")        
 
         # Time Domain
-        
-        numTotalSample = int(self._txtFilterLength.get_text())
-        self.__timeVec = [0.0] * numTotalSample
-        self.__impulseResp = [0.0] * numTotalSample
-        self.__stepResp = [0.0] * numTotalSample
-        self.__window = [0.0] * numTotalSample
-        self.__windowedImpResp = [0.0] * numTotalSample
-        self.__windowedStepResp = [0.0] * numTotalSample
+        total_sample_num = int(self._txt_filter_len.get_val())
+        self._time_vec: list[float] = [0.0] * total_sample_num
+        self._impulse_resp: list[float] = [0.0] * total_sample_num
+        self._step_resp: list[float] = [0.0] * total_sample_num
+        self._window: list[float] = [0.0] * total_sample_num
+        self._wind_imp_resp: list[float] = [0.0] * total_sample_num
+        self._wind_step_resp: list[float] = [0.0] * total_sample_num
 
-        self._FilterResponseinTimeDomain = self.get_control("FilterResponseinTimeDomain")
-        self._WindowFunctioninTimeDomain = self.get_control("WindowFunctioninTimeDomain")
+        self._filter_resp_time_domain: MatPlotCtrl = \
+            cast(MatPlotCtrl, self.get_control("FilterResponseinTimeDomain"))
+        self._win_funct_time_domain: MatPlotCtrl = \
+            cast(MatPlotCtrl, self.get_control("WindowFunctioninTimeDomain"))
+
+        self._filter_freq_resp: MatPlotCtrl = \
+            cast(MatPlotCtrl, self.get_control("FilterFrequencyResponse"))
+        self._win_funct_freq_resp: MatPlotCtrl = \
+            cast(MatPlotCtrl, self.get_control("WindowFunctionFrequencyResponse"))
 
         # Frequency Domain
-        numFreqSample = self.__numFreqSample
-        self.__freqVec = [0.0] * numFreqSample
-        self.__impRespMag = [0.0] * numFreqSample
-        self.__winRespMag = [0.0] * numFreqSample
-        self.__winMag = [0.0] * numFreqSample
+        freq_sample_num = self._freq_sample_num
+        self._freq_vec: list[float] = [0.0] * freq_sample_num
+        self._imp_resp_mag: list[float] = [0.0] * freq_sample_num
+        self._win_resp_mag: list[float] = [0.0] * freq_sample_num
+        self._win_mag: list[float] = [0.0] * freq_sample_num
 
-        self._FilterFrequencyResponse = self.get_control("FilterFrequencyResponse")
-        self._WindowFunctionFrequencyResponse = self.get_control("WindowFunctionFrequencyResponse")
+    def _before_go(self):
+        self._rad_filt_type_changed()
+        self._design_filter()
 
-    def go(self):
-        self._radFilterTypeChanged()
-        self.__DesignFilter()
-        self._frmApp.mainloop()
+    def _design_filter(self):
+        self._compute_time_vec()
+        self._compute_win()
+        self._compute_resps()
+        self._compute_wind_resps()
 
-    def __DesignFilter(self):
-        self.__ComputeTimeVec()
-        self.__ComputeWindow()
-        self.__ComputeResps()
-        self.__ComputeWindowedResps()
+        self._compute_freq_vec()
+        self._compute_resp_bode()
+        self._compute_win_dft()
 
-        self.__ComputeFreqVec()
-        self.__ComputeRespBode()
-        self.__ComputeWindowDFT()
+        self._update_charts()
+        self._update_plot_settings()
 
-        self.__UpdateCharts()
-        self.__UpdatePlotSettings()
+    def _update_charts(self):
 
-    def __UpdateCharts(self):
+        self._filter_resp_time_domain.xdata = self._time_vec
+        y_line = LineData(self._impulse_resp, {"label": "Impulse Response"})
+        _ = self._filter_resp_time_domain.add_line(y_line)
+        y_line = LineData(self._wind_imp_resp, {"label": "Windowed Impulse Response"})
+        _ = self._filter_resp_time_domain.add_line(y_line)
+        y_line = LineData(self._step_resp, {"label": "Step Response"}, visible = False)
+        _ = self._filter_resp_time_domain.add_line(y_line)
+        y_line = LineData(self._wind_step_resp, {"label": "Windowed Step Response"}, visible = False)
+        _ = self._filter_resp_time_domain.add_line(y_line)
+        self._filter_resp_time_domain.draw()
 
-        self._FilterResponseinTimeDomain.set_xData(self.__timeVec)
-        yLine = LineData(self.__impulseResp, "Impulse Response")
-        self._FilterResponseinTimeDomain.add_line(yLine, 0)
-        yLine = LineData(self.__windowedImpResp, "Windowed Impulse Response")
-        self._FilterResponseinTimeDomain.add_line(yLine, 1)
-        yLine = LineData(self.__stepResp, "Step Response", visible = False)
-        self._FilterResponseinTimeDomain.add_line(yLine, 2)
-        yLine = LineData(self.__windowedStepResp, "Windowed Step Response", visible = False)
-        self._FilterResponseinTimeDomain.add_line(yLine, 3)
-        self._FilterResponseinTimeDomain.draw()
+        self._win_funct_time_domain.xdata = self._time_vec
+        y_line = LineData(self._window)
+        _ = self._win_funct_time_domain.add_line(y_line)
+        self._win_funct_time_domain.draw()
 
-        self._WindowFunctioninTimeDomain.set_xData(self.__timeVec)
-        yLine = LineData(self.__window, "Window")
-        self._WindowFunctioninTimeDomain.add_line(yLine, 0)
-        self._WindowFunctioninTimeDomain.draw()
+        self._filter_freq_resp.xdata = self._freq_vec
+        y_line = LineData(self._imp_resp_mag)
+        id_ = self._filter_freq_resp.add_line(y_line)
+        print(f"id of imp_resp_mag: {id_}")
+        print(f"length of _imp_resp_mag: {len(self._imp_resp_mag)}")
+        y_line = LineData(self._win_resp_mag)
+        id_ = self._filter_freq_resp.add_line(y_line)
+        print(f"id of _win_resp_mag: {id_}")
+        print(f"length of _win_resp_mag: {len(self._win_resp_mag)}")
+        self._filter_freq_resp.draw()
 
-        self._FilterFrequencyResponse.set_xData(self.__freqVec)
-        yLine = LineData(self.__impRespMag, "Impluse Response Magnitude")
-        self._FilterFrequencyResponse.add_line(yLine, 0)
-        yLine = LineData(self.__winRespMag, "Windowed Response Magnitude")
-        self._FilterFrequencyResponse.add_line(yLine, 1)
-        self._FilterFrequencyResponse.draw()
-
-        self._WindowFunctionFrequencyResponse.set_xData(self.__freqVec)
-        yLine = LineData(self.__winMag, "Window Magnitude")
-        self._WindowFunctionFrequencyResponse.add_line(yLine, 0)
-        self._WindowFunctionFrequencyResponse.draw()
+        self._win_funct_freq_resp.xdata = self._freq_vec
+        y_line = LineData(self._win_mag)
+        _ = self._win_funct_freq_resp.add_line(y_line)
+        self._win_funct_freq_resp.draw()
 
     # Time Domain Functions
-    def __ComputeTimeVec(self):
-        numTotalSample = int(self._txtFilterLength.get_text())
-        # self.__timeVec = new float[self.__numTotalSample]
-        self.__timeVec = [0.0] * numTotalSample
+    def _compute_time_vec(self):
+        total_sample_num = int(self._txt_filter_len.get_val())
+        self._time_vec = [0.0] * total_sample_num
 
-        tiSample = float(self._txtSampleTime.get_text())
-        # for (int n = 0 n < self.__numTotalSample n++):
-        for n in range(numTotalSample):
-            self.__timeVec[n] = n * tiSample
+        ti_sample = float(self._txt_sample_time.get_val())
+        for n in range(total_sample_num):
+            self._time_vec[n] = n * ti_sample
 
-        # pv(self.__timeVec)
+        # pv(self._timeVec)
 
-    def __ComputeResps(self):
-        numTotalSample = int(self._txtFilterLength.get_text())
-        # self.__impulseResp = new float[self.__numTotalSample]
-        self.__impulseResp = [0.0] * numTotalSample
-        # self.__stepResp = new float[self.__numTotalSample]
-        self.__stepResp = [0.0] * numTotalSample
+    def _compute_resps(self):
+        total_sample_num = int(self._txt_filter_len.get_val())
+        self._impulse_resp = [0.0] * total_sample_num
+        self._step_resp = [0.0] * total_sample_num
 
-        numShftSample = int(self._txtShiftSamples.get_text())
-        stFiltTyp = FilrType(self._radFilterType.get_text())
-        tiSample = float(self._txtSampleTime.get_text())
-        frqCutOffLo = float(self._txtLowFrequency.get_text())
-        frqCutOffHi = float(self._txtHighFrequency.get_text())
-        # for (int n = 0 n < self.__numTotalSample n++)
-        for n in range(numTotalSample):
-            if (n != numShftSample):
-                if stFiltTyp == FilrType.LowPass:
-                    self.__impulseResp[n] = math.sin(2.0 * math.pi * frqCutOffLo * tiSample * (n - numShftSample)) / (math.pi * tiSample * (n - numShftSample))
-                elif stFiltTyp == FilrType.HighPass:
-                    self.__impulseResp[n] = (math.sin(math.pi * (n - numShftSample)) - math.sin(2.0 * math.pi * frqCutOffHi * tiSample * (n - numShftSample))) / (math.pi * tiSample * (n - numShftSample))
-                elif stFiltTyp == FilrType.BandPass:
-                    self.__impulseResp[n] = (math.sin(2.0 * math.pi * frqCutOffHi * tiSample * (n - numShftSample)) - math.sin(2.0 * math.pi * frqCutOffLo * tiSample * (n - numShftSample))) / (math.pi * tiSample * (n - numShftSample))
-                elif stFiltTyp == FilrType.BandStop:
-                    self.__impulseResp[n] = (math.sin(2.0 * math.pi * frqCutOffLo * tiSample * (n - numShftSample)) - math.sin(2.0 * math.pi * frqCutOffHi * tiSample * (n - numShftSample)) + math.sin(math.pi * (n - numShftSample))) / (math.pi * tiSample * (n - numShftSample))
+        shft_sample_num = int(self._txt_shift_samples.get_val())
+        filt_typ = FilrType(self._rad_filt_typ.get_val())
+        ti_sample = float(self._txt_sample_time.get_val())
+        frq_cutoff_lo = float(self._txt_low_freq.get_val())
+        frq_cutoff_hi = float(self._txt_high_freq.get_val())
+        for n in range(total_sample_num):
+            if n != shft_sample_num:
+                if filt_typ == FilrType.LowPass:
+                    self._impulse_resp[n] = math.sin(2.0 * math.pi * frq_cutoff_lo * \
+                        ti_sample * (n - shft_sample_num)) / (math.pi * ti_sample * (n - shft_sample_num))
+                elif filt_typ == FilrType.HighPass:
+                    self._impulse_resp[n] = (math.sin(math.pi * (n - shft_sample_num)) - \
+                        math.sin(2.0 * math.pi * frq_cutoff_hi * ti_sample * (n - shft_sample_num))) \
+                        / (math.pi * ti_sample * (n - shft_sample_num))
+                elif filt_typ == FilrType.BandPass:
+                    self._impulse_resp[n] = (math.sin(2.0 * math.pi * frq_cutoff_hi * \
+                        ti_sample * (n - shft_sample_num)) - math.sin(2.0 * math.pi * \
+                        frq_cutoff_lo * ti_sample * (n - shft_sample_num))) / (math.pi * \
+                        ti_sample * (n - shft_sample_num))
+                elif filt_typ == FilrType.BandStop:
+                    self._impulse_resp[n] = (math.sin(2.0 * math.pi * frq_cutoff_lo * \
+                        ti_sample * (n - shft_sample_num)) - math.sin(2.0 * math.pi * \
+                        frq_cutoff_hi * ti_sample * (n - shft_sample_num)) + math.sin(math.pi * \
+                        (n - shft_sample_num))) / (math.pi * ti_sample * (n - shft_sample_num))
 
             else: # Avoid divide-by-zero, limit is 2*fc
-                if stFiltTyp == FilrType.LowPass:
-                    self.__impulseResp[n] = 2.0 * frqCutOffLo
-                elif stFiltTyp == FilrType.HighPass:
-                    self.__impulseResp[n] = 1.0 / tiSample - 2.0 * frqCutOffHi
-                elif stFiltTyp == FilrType.BandPass:
-                    self.__impulseResp[n] = 2.0 * frqCutOffHi - 2.0 * frqCutOffLo
-                elif stFiltTyp == FilrType.BandStop:
-                    self.__impulseResp[n] = 2.0 * frqCutOffLo - 2.0 * frqCutOffHi + 1.0 / tiSample
+                if filt_typ == FilrType.LowPass:
+                    self._impulse_resp[n] = 2.0 * frq_cutoff_lo
+                elif filt_typ == FilrType.HighPass:
+                    self._impulse_resp[n] = 1.0 / ti_sample - 2.0 * frq_cutoff_hi
+                elif filt_typ == FilrType.BandPass:
+                    self._impulse_resp[n] = 2.0 * frq_cutoff_hi - 2.0 * frq_cutoff_lo
+                elif filt_typ == FilrType.BandStop:
+                    self._impulse_resp[n] = 2.0 * frq_cutoff_lo - 2.0 * frq_cutoff_hi + 1.0 / ti_sample
 
         # Normalise by DC gain to achieve 0dB gain at DC and then compute step response
-        # for (int n = 0 n < self.__numTotalSample n++)
-        for n in range(numTotalSample):
-            self.__impulseResp[n] *= tiSample
+        for n in range(total_sample_num):
+            self._impulse_resp[n] *= ti_sample
 
-            if (n == 0):
-                self.__stepResp[n] = 0.5 * self.__impulseResp[n]
+            if n == 0:
+                self._step_resp[n] = 0.5 * self._impulse_resp[n]
             else:
-                self.__stepResp[n] = self.__stepResp[n - 1] + 0.5 * (self.__impulseResp[n] + self.__impulseResp[n - 1])
+                self._step_resp[n] = self._step_resp[n - 1] + 0.5 * (self._impulse_resp[n] + \
+                    self._impulse_resp[n - 1])
 
-        # pv(self.__impulseResp)
-        # pv(self.__stepResp)
+        # pv(self._impulse_resp)
+        # pv(self._step_resp)
 
-    def __ComputeWindow(self):
-        numTotalSample = int(self._txtFilterLength.get_text())
-        # self.__window = new float[self.__numTotalSample]
-        self.__window = [0.0] * numTotalSample
+    def _compute_win(self):
+        total_sample_num = int(self._txt_filter_len.get_val())
+        self._window = [0.0] * total_sample_num
 
-        stWinTyp = self._cmbWindowType.get_text()
+        win_typ = self._cmb_win_typ.get_val()
 
-        # for (int n = 0 n < numTotalSample n++)
-        for n in range(numTotalSample):
-            if stWinTyp == "Rectangular":
-                self.__window[n] = 1.0
-            elif stWinTyp == "Triangular":
-                self.__window[n] = 1.0 - abs((n - 0.5 * numTotalSample) / (0.5 * numTotalSample))
-            elif stWinTyp == "Welch":
-                self.__window[n] = 1.0 - math.pow((n - 0.5 * numTotalSample) / (0.5 * numTotalSample), 2.0)
-            elif stWinTyp == "Sine":
-                self.__window[n] = math.sin(math.pi * n / (numTotalSample))
-            elif stWinTyp == "Hann":
-                self.__window[n] = 0.5 * (1 - math.cos(2.0 * math.pi * n / (numTotalSample)))
-            elif stWinTyp == "Hamming":
-                self.__window[n] = (25.0 / 46.0) - (21.0 / 46.0) * math.cos(2.0 * math.pi * n / (numTotalSample))
-            elif stWinTyp == "Blackman":
-                self.__window[n] = 0.42 - 0.5 * math.cos(2.0 * math.pi * n / (numTotalSample)) + 0.08 * math.cos(4.0 * math.pi * n / (numTotalSample))
-            elif stWinTyp == "Nuttall":
-                self.__window[n] = 0.355768 - 0.487396 * math.cos(2.0 * math.pi * n / (numTotalSample)) + 0.144232 * math.cos(4.0 * math.pi * n / (numTotalSample)) - 0.012604 * math.cos(6.0 * math.pi * n / (numTotalSample))
-            elif stWinTyp == "BlackmanNuttall":
-                self.__window[n] = 0.3635819 - 0.4891775 * math.cos(2.0 * math.pi * n / (numTotalSample)) + 0.1365995 * math.cos(4.0 * math.pi * n / (numTotalSample)) - 0.0106411 * math.cos(6.0 * math.pi * n / (numTotalSample))
-            elif stWinTyp == "BlackmanHarris":
-                self.__window[n] = 0.35875 - 0.48829 * math.cos(2.0 * math.pi * n / (numTotalSample)) + 0.14128 * math.cos(4.0 * math.pi * n / (numTotalSample)) - 0.01168 * math.cos(6.0 * math.pi * n / (numTotalSample))
-            elif stWinTyp == "FlatTop":
-                self.__window[n] = 0.21557895 - 0.41663158 * math.cos(2.0 * math.pi * n / (numTotalSample)) + 0.277263158 * math.cos(4.0 * math.pi * n / (numTotalSample)) - 0.083578947 * math.cos(6.0 * math.pi * n / (numTotalSample)) + 0.006947368 * math.cos(8.0 * math.pi * n / (numTotalSample))
+        for n in range(total_sample_num):
+            if win_typ == "Rectangular":
+                self._window[n] = 1.0
+            elif win_typ == "Triangular":
+                self._window[n] = 1.0 - abs((n - 0.5 * total_sample_num) / (0.5 * total_sample_num))
+            elif win_typ == "Welch":
+                self._window[n] = 1.0 - math.pow((n - 0.5 * total_sample_num) / (0.5 * total_sample_num), 2.0)
+            elif win_typ == "Sine":
+                self._window[n] = math.sin(math.pi * n / (total_sample_num))
+            elif win_typ == "Hann":
+                self._window[n] = 0.5 * (1 - math.cos(2.0 * math.pi * n / (total_sample_num)))
+            elif win_typ == "Hamming":
+                self._window[n] = (25.0 / 46.0) - (21.0 / 46.0) * \
+                    math.cos(2.0 * math.pi * n / (total_sample_num))
+            elif win_typ == "Blackman":
+                self._window[n] = 0.42 - 0.5 * math.cos(2.0 * math.pi * \
+                    n / (total_sample_num)) + 0.08 * math.cos(4.0 * math.pi * n / (total_sample_num))
+            elif win_typ == "Nuttall":
+                self._window[n] = 0.355768 - 0.487396 * math.cos(2.0 * math.pi * \
+                    n / (total_sample_num)) + 0.144232 * math.cos(4.0 * math.pi * \
+                    n / (total_sample_num)) - 0.012604 * math.cos(6.0 * math.pi * n / (total_sample_num))
+            elif win_typ == "BlackmanNuttall":
+                self._window[n] = 0.3635819 - 0.4891775 * math.cos(2.0 * math.pi * \
+                    n / (total_sample_num)) + 0.1365995 * math.cos(4.0 * math.pi * \
+                    n / (total_sample_num)) - 0.0106411 * math.cos(6.0 * math.pi * n / (total_sample_num))
+            elif win_typ == "BlackmanHarris":
+                self._window[n] = 0.35875 - 0.48829 * math.cos(2.0 * math.pi * \
+                    n / (total_sample_num)) + 0.14128 * math.cos(4.0 * math.pi * \
+                    n / (total_sample_num)) - 0.01168 * math.cos(6.0 * math.pi * n / (total_sample_num))
+            elif win_typ == "FlatTop":
+                self._window[n] = 0.21557895 - 0.41663158 * math.cos(2.0 * math.pi * \
+                    n / (total_sample_num)) + 0.277263158 * math.cos(4.0 * math.pi * \
+                    n / (total_sample_num)) - 0.083578947 * math.cos(6.0 * math.pi * \
+                    n / (total_sample_num)) + 0.006947368 * math.cos(8.0 * math.pi * n / (total_sample_num))
             else:
-                self.__window[n] = 1.0
+                self._window[n] = 1.0
 
-        # pv(self.__window)
+        # pv(self._window)
 
-    def __ComputeWindowedResps(self):
-        numTotalSample = int(self._txtFilterLength.get_text())
-        # self.__windowedImpResp = new float[self.__numTotalSample]
-        self.__windowedImpResp = [0.0] * numTotalSample
-        # self.__windowedStepResp = new float[self.__numTotalSample]
-        self.__windowedStepResp = [0.0] * numTotalSample
+    def _compute_wind_resps(self):
+        total_sample_num = int(self._txt_filter_len.get_val())
+        self._wind_imp_resp = [0.0] * total_sample_num
+        self._wind_step_resp = [0.0] * total_sample_num
 
-        # for (int n = 0; n < self.__numTotalSample; n++):
-        for n in range(numTotalSample):
-            self.__windowedImpResp[n] = self.__impulseResp[n] * self.__window[n]
+        for n in range(total_sample_num):
+            self._wind_imp_resp[n] = self._impulse_resp[n] * self._window[n]
 
-            if (n == 0):
-                self.__windowedStepResp[n] = 0.5 * self.__windowedStepResp[n]
+            if n == 0:
+                self._wind_step_resp[n] = 0.5 * self._wind_step_resp[n]
             else:
-                self.__windowedStepResp[n] = self.__windowedStepResp[n - 1] + 0.5 * (self.__windowedImpResp[n] + self.__windowedImpResp[n - 1])
+                self._wind_step_resp[n] = self._wind_step_resp[n - 1] + \
+                    0.5 * (self._wind_imp_resp[n] + self._wind_imp_resp[n - 1])
 
-        # pv(self.__windowedImpResp)
-        # pv(self.__windowedStepResp)
+        # pv(self._wind_imp_resp)
+        # pv(self._wind_step_resp)
 
-    # Frequency Domain Functions
-    def __ComputeFreqVec(self):
-        numFreqSample = self.__numFreqSample
-        # freqVecHz = new float[self.__numFreqSample]
-        self.__freqVec = [0.0] * numFreqSample
+    def _compute_freq_vec(self):
+        ''' Frequency Domain Functions
+        '''
+        freq_sample_num = self._freq_sample_num
+        self._freq_vec = [0.0] * freq_sample_num
 
-        tiSample = float(self._txtSampleTime.get_text())
-        df = (0.5 / tiSample) / (numFreqSample - 1.0)
+        ti_sample = float(self._txt_sample_time.get_val())
+        df = (0.5 / ti_sample) / (freq_sample_num - 1.0)
         pv(df)
 
-        # for (int n = 0; n < self.__numFreqSample; n++):
-        for n in range(numFreqSample):
-            self.__freqVec[n] = n * df
+        for n in range(freq_sample_num):
+            self._freq_vec[n] = n * df
 
-    def __ComputeRespBode(self):
-        numFreqSample = self.__numFreqSample
-        # impRespMag = new float[self.__numFreqSample]
-        self.__impRespMag = [0.0] * numFreqSample
-        # winRespMag = new float[self.__numFreqSample]
-        self.__winRespMag = [0.0] * numFreqSample
+    def _compute_resp_bode(self):
+        freq_sample_num = self._freq_sample_num
+        self._imp_resp_mag = [0.0] * freq_sample_num
+        self._win_resp_mag = [0.0] * freq_sample_num
 
-        numTotalSample = int(self._txtFilterLength.get_text())
-        tiSample = float(self._txtSampleTime.get_text())
-        # for (int fIndex = 0; fIndex < NUM_FREQ_SAMPLES; fIndex++):
-        for fIndex in range(numFreqSample):
+        numTotalSample = int(self._txt_filter_len.get_val())
+        ti_sample = float(self._txt_sample_time.get_val())
+        for fIndex in range(freq_sample_num):
             re = 0.0
             im = 0.0
-            reWin = 0.0
-            imWin = 0.0
+            re_win = 0.0
+            im_win = 0.0
 
-            # for (int n = 0; n < self.__numTotalSample; n++)
             for n in range(numTotalSample):
-                re = re + self.__impulseResp[n] * math.cos(2.0 * math.pi * self.__freqVec[fIndex] * n * tiSample)
-                im = im - self.__impulseResp[n] * math.sin(2.0 * math.pi * self.__freqVec[fIndex] * n * tiSample)
-                reWin = reWin + self.__windowedImpResp[n] * math.cos(2.0 * math.pi * self.__freqVec[fIndex] * n * tiSample)
-                imWin = imWin - self.__windowedImpResp[n] * math.sin(2.0 * math.pi * self.__freqVec[fIndex] * n * tiSample)
+                re = re + self._impulse_resp[n] * math.cos(2.0 * math.pi * \
+                    self._freq_vec[fIndex] * n * ti_sample)
+                im = im - self._impulse_resp[n] * math.sin(2.0 * math.pi * \
+                    self._freq_vec[fIndex] * n * ti_sample)
+                re_win = re_win + self._wind_imp_resp[n] * math.cos(2.0 * math.pi * \
+                    self._freq_vec[fIndex] * n * ti_sample)
+                im_win = im_win - self._wind_imp_resp[n] * math.sin(2.0 * math.pi * \
+                    self._freq_vec[fIndex] * n * ti_sample)
 
-            self.__impRespMag[fIndex] = 10.0 * math.log10(re * re + im * im)
-            self.__winRespMag[fIndex] = 10.0 * math.log10(reWin * reWin + imWin * imWin)
+            self._imp_resp_mag[fIndex] = 10.0 * math.log10(re * re + im * im)
+            self._win_resp_mag[fIndex] = 10.0 * math.log10(re_win * re_win + im_win * im_win)
 
-    def __GetGainAtCutOff(self) -> float:
+    def _get_gain_cutoff(self) -> float:
         re = 0.0
         im = 0.0
 
-        numTotalSample = int(self._txtFilterLength.get_text())
-        # for (int n = 0; n < self.__numTotalSample; n++):
-        for n in range(numTotalSample):
-            re = re + self.__impulseResp[n] * math.cos(2.0 * math.pi * float(self._txtLowFrequency.get_text()) * n * float(self._txtSampleTime.get_text()))
-            im = im - self.__impulseResp[n] * math.sin(2.0 * math.pi * float(self._txtLowFrequency.get_text()) * n * float(self._txtSampleTime.get_text()))
+        total_sample_num = int(self._txt_filter_len.get_val())
+        ti_sample = float(self._txt_sample_time.get_val())
+        frq_cutoff_lo = float(self._txt_low_freq.get_val())
+        # frq_cutoff_hi = float(self._txt_high_freq.get_val())
+        for n in range(total_sample_num):
+            re = re + self._impulse_resp[n] * math.cos(2.0 * math.pi * \
+                frq_cutoff_lo * n * ti_sample)
+            im = im - self._impulse_resp[n] * math.sin(2.0 * math.pi * \
+                frq_cutoff_lo * n * ti_sample)
 
         return (10.0 * math.log10(re * re + im * im))
 
-    def __ComputeWindowDFT(self):
-        numFreqSample = self.__numFreqSample
-        # winMag = new float[self.__numFreqSample]
-        self.__winMag = [0.0] * numFreqSample
+    def _compute_win_dft(self):
+        freq_sample_num = self._freq_sample_num
+        self._win_mag = [0.0] * freq_sample_num
 
-        numTotalSample = int(self._txtFilterLength.get_text())
-        tiSample = float(self._txtSampleTime.get_text())
-        # for (int fIndex = 0; fIndex < NUM_FREQ_SAMPLES; fIndex++):
-        for fIndex in range(numFreqSample):
-
+        total_sample_num = int(self._txt_filter_len.get_val())
+        ti_sample = float(self._txt_sample_time.get_val())
+        for i in range(freq_sample_num):
             re = 0.0
             im = 0.0
+            for n in range(total_sample_num):
+                re = re + self._window[n] * math.cos(2.0 * math.pi * \
+                    self._freq_vec[i] * n * ti_sample)
+                im = im - self._window[n] * math.sin(2.0 * math.pi * \
+                    self._freq_vec[i] * n * ti_sample)
 
-            # for (int n = 0; n < NUM_TOTAL_SAMPLES; n++):
-            for n in range(numTotalSample):
-                re = re + self.__window[n] * math.cos(2.0 * math.pi * self.__freqVec[fIndex] * n * tiSample)
-                im = im - self.__window[n] * math.sin(2.0 * math.pi * self.__freqVec[fIndex] * n * tiSample)
+            self._win_mag[i] = 10.0 * math.log10(re * re + im * im)
 
-            self.__winMag[fIndex] = 10.0 * math.log10(re * re + im * im)
+    def _update_plot_settings(self):
+        resp_plt_typ = RespPltType(self._rad_resp_plot.get_val())
+        pv(resp_plt_typ.name)
+        display_typ = self._cmb_display_typ.get_val()
+        pv(display_typ)
 
-    def __UpdatePlotSettings(self):
-        stRespPltTyp = RespPltType(self._radResponsePlot.get_text())
-        pv(stRespPltTyp)
-        stDisplay = self._cmbDisplayType.get_text()
-        pv(stDisplay)
+        if resp_plt_typ == RespPltType.Impulse:        # Impulse
+            if display_typ == "Both":
+                self._filter_resp_time_domain.show_line(0, True)
+                self._filter_resp_time_domain.show_line(1, True)
+            elif display_typ == "Raw Only":
+                self._filter_resp_time_domain.show_line(0, True)
+                self._filter_resp_time_domain.show_line(1, False)
+            elif display_typ == "Win Only":
+                self._filter_resp_time_domain.show_line(0, False)
+                self._filter_resp_time_domain.show_line(1, True)                
+            self._filter_resp_time_domain.show_line(2, False)
+            self._filter_resp_time_domain.show_line(3, False)            
 
-        if (stRespPltTyp == RespPltType.Impulse):		# Impulse
-            if (stDisplay == "Both"):
-                self._FilterResponseinTimeDomain.show_line(0, True)
-                self._FilterResponseinTimeDomain.show_line(1, True)
-            elif (stDisplay == "Raw Only"):
-                self._FilterResponseinTimeDomain.show_line(0, True)
-                self._FilterResponseinTimeDomain.show_line(1, False)
-            elif (stDisplay == "Win Only"):
-                self._FilterResponseinTimeDomain.show_line(0, False)
-                self._FilterResponseinTimeDomain.show_line(1, True)				
-            self._FilterResponseinTimeDomain.show_line(2, False)
-            self._FilterResponseinTimeDomain.show_line(3, False)			
+        else:        # Step
+            if display_typ == "Both":
+                self._filter_resp_time_domain.show_line(2, True)
+                self._filter_resp_time_domain.show_line(3, True)
+            elif display_typ == "Raw Only":
+                self._filter_resp_time_domain.show_line(2, True)
+                self._filter_resp_time_domain.show_line(3, False)
+            elif display_typ == "Win Only":
+                self._filter_resp_time_domain.show_line(2, False)
+                self._filter_resp_time_domain.show_line(3, True)
+            self._filter_resp_time_domain.show_line(0, False)
+            self._filter_resp_time_domain.show_line(1, False)
 
-        else:		# Step
-            if (stDisplay == "Both"):
-                self._FilterResponseinTimeDomain.show_line(2, True)
-                self._FilterResponseinTimeDomain.show_line(3, True)
-            elif (stDisplay == "Raw Only"):
-                self._FilterResponseinTimeDomain.show_line(2, True)
-                self._FilterResponseinTimeDomain.show_line(3, False)
-            elif (stDisplay == "Win Only"):
-                self._FilterResponseinTimeDomain.show_line(2, False)
-                self._FilterResponseinTimeDomain.show_line(3, True)
-            self._FilterResponseinTimeDomain.show_line(0, False)
-            self._FilterResponseinTimeDomain.show_line(1, False)
+        if display_typ == "Both":
+            self._filter_freq_resp.show_line(0, True)
+            self._filter_freq_resp.show_line(1, True)
+        elif display_typ == "Raw Only":
+            self._filter_freq_resp.show_line(0, True)
+            self._filter_freq_resp.show_line(1, False)
+        elif display_typ == "Win Only":
+            self._filter_freq_resp.show_line(0, False)
+            self._filter_freq_resp.show_line(1, True)
 
-        if (stDisplay == "Both"):
-            self._FilterFrequencyResponse.show_line(0, True)
-            self._FilterFrequencyResponse.show_line(1, True)
-        elif (stDisplay == "Raw Only"):
-            self._FilterFrequencyResponse.show_line(0, True)
-            self._FilterFrequencyResponse.show_line(1, False)
-        elif (stDisplay == "Win Only"):
-            self._FilterFrequencyResponse.show_line(0, False)
-            self._FilterFrequencyResponse.show_line(1, True)
+        self._filter_resp_time_domain.draw()
+        self._filter_freq_resp.draw()
 
-        self._FilterResponseinTimeDomain.draw()
-        self._FilterFrequencyResponse.draw()
+    def _btn_designfilter_click(self):
+        ti_sample = float(self._txt_sample_time.get_val())
+        pv(ti_sample)
+        total_sample_num = int(self._txt_filter_len.get_val())
+        pv(total_sample_num)
+        shft_sample_num = int(self._txt_shift_samples.get_val())
+        pv(shft_sample_num)
+        win_typ = self._cmb_win_typ.get_val()
+        pv(win_typ)
+        filt_typ = FilrType(self._rad_filt_typ.get_val())
+        pv(filt_typ)
 
-    def _btnDesignFilterClick(self):
-        tiSample = float(self._txtSampleTime.get_text())
-        pv(tiSample)
-        numTotalSample = int(self._txtFilterLength.get_text())
-        pv(numTotalSample)
-        numShftSample = int(self._txtShiftSamples.get_text())
-        pv(numShftSample)
-        stWinTyp = self._cmbWindowType.get_text()
-        pv(stWinTyp)
-        stFiltTyp = FilrType(self._radFilterType.get_text())
-        pv(stFiltTyp)
+        frq_cutoff_lo = 0
+        frq_cutoff_hi = 0
+        if filt_typ == FilrType.LowPass:
+            frq_cutoff_lo = float(self._txt_low_freq.get_val())
+            pv(frq_cutoff_lo)
+        elif filt_typ == FilrType.HighPass:
+            frq_cutoff_hi = float(self._txt_high_freq.get_val())
+            pv(frq_cutoff_hi)
+        elif filt_typ == FilrType.BandPass:
+            frq_cutoff_lo = float(self._txt_low_freq.get_val())
+            frq_cutoff_hi = float(self._txt_high_freq.get_val())
+            pv(frq_cutoff_lo)
+            pv(frq_cutoff_hi)
+        elif filt_typ == FilrType.BandStop:
+            frq_cutoff_lo = float(self._txt_low_freq.get_val())
+            frq_cutoff_hi = float(self._txt_high_freq.get_val())
+            pv(frq_cutoff_lo)
+            pv(frq_cutoff_hi)
 
-        frqCutOffLo = 0
-        frqCutOffHi = 0
-        if (stFiltTyp == FilrType.LowPass):
-            frqCutOffLo = float(self._txtLowFrequency.get_text())
-            pv(frqCutOffLo)
-        elif (stFiltTyp == FilrType.HighPass):
-            frqCutOffHi = float(self._txtHighFrequency.get_text())
-            pv(frqCutOffHi)
-        elif (stFiltTyp == FilrType.BandPass):
-            frqCutOffLo = float(self._txtLowFrequency.get_text())
-            frqCutOffHi = float(self._txtHighFrequency.get_text())
-            pv(frqCutOffLo)
-            pv(frqCutOffHi)
-        elif (stFiltTyp == FilrType.BandStop):
-            frqCutOffLo = float(self._txtLowFrequency.get_text())
-            frqCutOffHi = float(self._txtHighFrequency.get_text())
-            pv(frqCutOffLo)
-            pv(frqCutOffHi)
-
-        if (tiSample < 0.0):
-            self.show_err("", "Sampling frequency cannot be negative.")
+        if ti_sample < 0.0:
+            self.show_err("Sampling frequency cannot be negative.")
             return
 
-        if (frqCutOffLo >= 0.5 / tiSample or frqCutOffHi >= 0.5 / tiSample):
-            self.show_err("","Cut-off frequency has to be less than the Nyquist frequency (i.e. sampling freq / 2).")
+        if frq_cutoff_lo >= 0.5 / ti_sample or frq_cutoff_hi >= 0.5 / ti_sample:
+            self.show_err("Cut-off frequency has to be less than the " + \
+                "Nyquist frequency (i.e. sampling freq / 2).")
             return
 
-        if (numTotalSample < 0 or numShftSample < 0):
-            self.show_err("","Total number of samples and sample shift number both need to be integers, greater than zero.")
+        if total_sample_num < 0 or shft_sample_num < 0:
+            self.show_err("Total number of samples and sample shift " + \
+                "number both need to be integers, greater than zero.")
             return
 
-        self.__DesignFilter()
+        self._design_filter()
 
-    def _varWindowTypeChanged(self):
+    def _var_win_typ_changed(self):
  
-        self.__stWinTyp = self._cmbWindowType.get_text()
-        pv(self.__stWinTyp)
+        self._win_typ = self._cmb_win_typ.get_val()
+        pv(self._win_typ)
 
-        self.__ComputeTimeVec()
-        self.__ComputeFreqVec()
-        self.__ComputeWindow()
-        self.__ComputeWindowDFT()
+        self._compute_time_vec()
+        self._compute_freq_vec()
+        self._compute_win()
+        self._compute_win_dft()
 
-        self._WindowFunctioninTimeDomain.update_yData(0, self.__window)
-        self._WindowFunctioninTimeDomain.draw()
+        self._win_funct_time_domain.update_ydata(0, self._window)
+        self._win_funct_time_domain.draw()
 
-        self._WindowFunctionFrequencyResponse.update_yData(0, self.__winMag)
-        self._WindowFunctionFrequencyResponse.draw()		
+        self._win_funct_freq_resp.update_ydata(0, self._win_mag)
+        self._win_funct_freq_resp.draw()        
 
     def _info(self):
-        self.show_info("Info", "FIR Filter Designer\nWritten by Philip M. Salmony\n29 November 2019\nphilsal.co.uk")
+        self.show_info("Info", "FIR Filter Designer\nWritten " + \
+            "by Philip M. Salmony\n29 November 2019\nphilsal.co.uk")
 
-    def _radFilterTypeChanged(self):
-        stFiltTyp = FilrType(self._radFilterType.get_text())
-        pv(stFiltTyp)
+    def _rad_filt_type_changed(self):
+        filt_typ = FilrType(self._rad_filt_typ.get_val())
+        pv(filt_typ)
 
-        if (stFiltTyp == FilrType.LowPass):
-            self._txtLowFrequency.configure(state='normal')
-            self._txtHighFrequency.configure(state='disabled')
-        elif (stFiltTyp == FilrType.HighPass):
-            self._txtLowFrequency.configure(state='disabled')
-            self._txtHighFrequency.configure(state='normal')
-        elif (stFiltTyp == FilrType.BandPass):
-            self._txtLowFrequency.configure(state='normal')
-            self._txtHighFrequency.configure(state='normal')
-        elif (stFiltTyp == FilrType.BandStop):
-            self._txtLowFrequency.configure(state='normal')
-            self._txtHighFrequency.configure(state='normal')
+        if filt_typ == FilrType.LowPass:
+            _ = self._txt_low_freq.configure(state='normal')
+            _ = self._txt_high_freq.configure(state='disabled')
+        elif filt_typ == FilrType.HighPass:
+            _ = self._txt_low_freq.configure(state='disabled')
+            _ = self._txt_high_freq.configure(state='normal')
+        elif filt_typ == FilrType.BandPass:
+            _ = self._txt_low_freq.configure(state='normal')
+            _ = self._txt_high_freq.configure(state='normal')
+        elif filt_typ == FilrType.BandStop:
+            _ = self._txt_low_freq.configure(state='normal')
+            _ = self._txt_high_freq.configure(state='normal')
 
-    def process_message(self, idCtrl, msg, extMsg=""):
-        if (idCtrl == "ResponsePlot"):
-            self.__UpdatePlotSettings()
-        elif (idCtrl == "DisplayType"):
-            self.__UpdatePlotSettings()
-        elif (idCtrl == "WindowType"):
-            self._varWindowTypeChanged()
-        elif (idCtrl == "FilterType"):
-            self._radFilterTypeChanged()
-        elif (idCtrl == "DesignFilter"):
-            self._btnDesignFilterClick()
-        elif (idCtrl == "info"):
-            self._info()
-        elif (idCtrl == "ExportCoefficients"):
-            self._export_coefficients()
-        elif (idCtrl == "ExportTimeDomainData"):
-            self._export_time_domain_data()
-        elif (idCtrl == "ExportFrequencyDomainData"):
-            self._export_frequency_domain_data()
-        else:
-            super().process_message(idCtrl, msg, extMsg)
+    @override
+    def process_message(self, idmsg: str, **kwargs):
+        match idmsg:
+            case "ResponsePlot":
+                self._update_plot_settings()
+            case "DisplayType":
+                self._update_plot_settings()
+            case "WindowType":
+                self._var_win_typ_changed()
+            case "FilterType":
+                self._rad_filt_type_changed()
+            case "DesignFilter":
+                self._btn_designfilter_click()
+            case "Info":
+                self._info()
+            case "ExportCoefficients":
+                self._export_coefficients()
+            case "ExportTimeDomainData":
+                self._export_time_domain_data()
+            case "ExportFrequencyDomainData":
+                self._export_frequency_domain_data()
+            case _:
+                _ = super().process_message(idmsg, **kwargs)
 
     def _export_coefficients(self):
 
-        filetypes = [('Text File', '*.txt'), ('All File', '*.*')]
-        title  = "Export Filter Coefficients"
+        file_types = [('Text File', '*.txt'), ('All File', '*.*')]
+        title = "Export Filter Coefficients"
 
-        r = tkFileDialog.asksaveasfilename(title=title, filetypes=filetypes)
+        r = tkFileDialog.asksaveasfilename(title=title, filetypes=file_types)
 
-        if (r != ""):
-
+        if r != "":
             pv(r)
             ext = os.path.splitext(r)[-1]
             if not ext:
                 r += ".txt"
 
-            numTotalSample = int(self._txtFilterLength.get_text())
             with open(r, 'w') as file:
+                total_sample_num = int(self._txt_filter_len.get_val())
+                ti_sample = float(self._txt_sample_time.get_val())
+                frq_cutoff_lo = float(self._txt_low_freq.get_val())
+                frq_cutoff_hi = float(self._txt_high_freq.get_val())
+
                 # string[] data = new string[3]
-                dataLst = [""] * 3
-                # dataLst[0] = "Filr Order: " + self.__numTotalSample + " Sampling Freq (Hz): " + (1.0 / self.__tiSample).ToString("F6") + " Cut-Off Freq Lo (Hz): " + self.__frqCutOffLo.ToString("F6") + " Cut-Off Freq Hi (Hz): " + self.__frqCutOffHi.ToString("F6") + "\n\n"
-                dataLst[0] = f"Filter Order: {numTotalSample} Sampling Frequency: {1.0 / float(self._txtSampleTime.get_text())}Hz, Cut-Off Frequency Low: {float(self._txtLowFrequency.get_text())}Hz, Cut-Off Frequency High: {float(self._txtHighFrequency.get_text())}Hz\n\n"
+                data_list = [""] * 3
+                # dataLst[0] = "Filr Order: " + self._numTotalSample + \
+                    # " Sampling Freq (Hz): " + (1.0 / self._tiSample).ToString("F6") + \
+                    # " Cut-Off Freq Lo (Hz): " + self._frqCutOffLo.ToString("F6") + \
+                    # " Cut-Off Freq Hi (Hz): " + self._frqCutOffHi.ToString("F6") + "\n\n"
+                data_list[0] = (f"Filter Order: {total_sample_num} "\
+                    f"Frequency: {1.0 / ti_sample}Hz, Cut-Off Frequency Low: " \
+                    f"{frq_cutoff_lo}Hz, Cut-Off Frequency High: {frq_cutoff_hi}Hz\n\n")
 
-                dataLst[1] = f"Coefficient, {self.__windowedImpResp[0]}"	# F7
-                dataLst[2] = "float Coefficient[] = {" + str(self.__windowedImpResp[0]) + "f"	# F7
+                data_list[1] = f"Coefficient, {self._wind_imp_resp[0]}"    # F7
+                data_list[2] = "float Coefficient[] = {" + str(self._wind_imp_resp[0]) + "f"    # F7
 
-                # for (int n = 1 n < NUM_TOTAL_SAMPLES n++)
-                for n in range(numTotalSample):
-                    dataLst[1] += "," + str(self.__windowedImpResp[n])			# F9
-                    dataLst[2] += "," + str(self.__windowedImpResp[n]) + "f"	# F7
+                for n in range(total_sample_num):
+                    data_list[1] += "," + str(self._wind_imp_resp[n])            # F9
+                    data_list[2] += "," + str(self._wind_imp_resp[n]) + "f"    # F7
 
                 # dataLst[1] = ", ".join()
                 # dataLst[2]
 
-                dataLst[1] += "\n\n"
-                dataLst[2] += "}"
+                data_list[1] += "\n\n"
+                data_list[2] += "}"
 
-                # System.IO.File.WriteAllLines(saveFileDialog.FileName, data)
-                for data in dataLst:
+                for data in data_list:
                     _ = file.write(data)
 
-                # MessageBox.Show("Coefficients written to file!", "Export Coefficients", MessageBoxButtons.OK, MessageBoxIcon.Information)
                 self.show_info(title, f"Coefficients written to {r}")
 
     def _export_time_domain_data(self):
 
         filetypes = [('Text File', '*.txt'), ('All File', '*.*')]
-        title  = "Export Time Domain Data"
+        title = "Export Time Domain Data"
 
-        r = tkFileDialog.asksaveasfilename(title=title, filetypes=filetypes)
-
-        if (r != ""):
+        if r := tkFileDialog.asksaveasfilename(title=title, filetypes=filetypes):
             pv(r)
             ext = os.path.splitext(r)[-1]
             if not ext:
                 r += ".txt"
 
-            numTotalSample = int(self._txtFilterLength.get_text())
             with open(r, 'w') as file:
-                # string[] data = new string[4]
-                dataLst = [""] * 4
-                # dataLst[0] = "[TIME DOMAIN DATA (TIME/IMPULSE/STEP)] Filter Order: " + self.__numTotalSample + " Sampling Frequency (Hz): " + (1.0 / self.__tiSample).ToString("F6") + " Cut-Off Frequency Low (Hz): " + self.__frqCutOffLo.ToString("F6") + " Cut-Off Frequency High (Hz): " + self.__frqCutOffHi.ToString("F6") + "\n\n"
-                dataLst[0] = f"[TIME DOMAIN DATA (TIME/IMPULSE/STEP)]\n\nFilter Order: {numTotalSample}, Sampling Frequency: {1.0 / float(self._txtSampleTime.get_text())}Hz, Cut-Off Frequency Low: {float(self._txtLowFrequency.get_text())}Hz, Cut-Off Frequency High: {float(self._txtHighFrequency.get_text())}Hz\n\n"
+                total_sample_num = int(self._txt_filter_len.get_val())
+                ti_sample = float(self._txt_sample_time.get_val())
+                frq_cutoff_lo = float(self._txt_low_freq.get_val())
+                frq_cutoff_hi = float(self._txt_high_freq.get_val())
 
-                dataLst[1] = f"Time Vector (s), {self.__timeVec[0]}"				# F6
-                dataLst[2] = f"Windowed Impulse Response, {self.__windowedImpResp[0]}"  # F9
-                dataLst[3] = f"Windowed Step Response, {self.__windowedStepResp[0]}"     # F9
-                # for (int n = 1; n < NUM_TOTAL_SAMPLES; n++):
-                for n in range(numTotalSample):
-                    dataLst[1] += "," + str(self.__timeVec[n])              	# F6
-                    dataLst[2] += "," + str(self.__windowedImpResp[n])    # F9
-                    dataLst[3] += "," + str(self.__windowedStepResp[n])       # F9
-                # dataLst[1] = ", ".join(str(self.__timeVec))
-                # dataLst[2] = ", ".join(str(self.__windowedImpResp))
-                # dataLst[3] = ", ".join(str(self.__windowedStepResp))
+                data_list = [""] * 4
+                # dataLst[0] = "[TIME DOMAIN DATA (TIME/IMPULSE/STEP)] Filter Order: " + \
+                    # "self._numTotalSample + " Sampling Frequency (Hz): " + \
+                    # (1.0 / self._tiSample).ToString("F6") + \
+                    # " Cut-Off Frequency Low (Hz): " + self._frqCutOffLo.ToString("F6") + \
+                    # " Cut-Off Frequency High (Hz): " + self._frqCutOffHi.ToString("F6") + "\n\n"
+                data_list[0] = (f"[TIME DOMAIN DATA (TIME/IMPULSE/STEP)]\n\nFilter Order: " \
+                    f"{total_sample_num}, Sampling Frequency: {1.0 / ti_sample}Hz, " \
+                    f"Cut-Off Frequency Low: {frq_cutoff_lo}Hz, Cut-Off Frequency High: {frq_cutoff_hi}Hz\n\n")
 
-                dataLst[1] += "\n\n"
-                dataLst[2] += "\n\n"
+                data_list[1] = f"Time Vector (s), {self._time_vec[0]}"                  # F6
+                data_list[2] = f"Windowed Impulse Response, {self._wind_imp_resp[0]}"   # F9
+                data_list[3] = f"Windowed Step Response, {self._wind_step_resp[0]}"     # F9
+                for n in range(total_sample_num):
+                    data_list[1] += "," + str(self._time_vec[n])            # F6
+                    data_list[2] += "," + str(self._wind_imp_resp[n])       # F9
+                    data_list[3] += "," + str(self._wind_step_resp[n])      # F9
+                # dataLst[1] = ", ".join(str(self._timeVec))
+                # dataLst[2] = ", ".join(str(self._windowedImpResp))
+                # dataLst[3] = ", ".join(str(self._windowedStepResp))
 
-                # System.IO.File.WriteAllLines(saveFileDialog.FileName, data)
-                for data in dataLst:
+                data_list[1] += "\n\n"
+                data_list[2] += "\n\n"
+
+                for data in data_list:
                     _ = file.write(data)
-                # MessageBox.Show("Data written to file!", "Export Time Domain Data", MessageBoxButtons.OK, MessageBoxIcon.Information)
                 self.show_info(title, f"Data written to {r}")
 
     def _export_frequency_domain_data(self):
 
         filetypes = [('Text File', '*.txt'), ('All File', '*.*')]
-        title  = "Export Frequency Domain Data"
+        title = "Export Frequency Domain Data"
 
-        r = tkFileDialog.asksaveasfilename(title=title, filetypes=filetypes)
-
-        if (r != ""):
+        if r := tkFileDialog.asksaveasfilename(title=title, filetypes=filetypes):
             pv(r)
             ext = os.path.splitext(r)[-1]
             if not ext:
                 r += ".txt"
 
             with open(r, 'w') as file:
+                total_sample_num = int(self._txt_filter_len.get_val())
+                ti_sample = float(self._txt_sample_time.get_val())
+                frq_cutoff_lo = float(self._txt_low_freq.get_val())
+                frq_cutoff_hi = float(self._txt_high_freq.get_val())
 
-                # string[] data = new string[4]
-                dataLst = [""] * 4
-                # dataLst[0] = "[FREQUENCY DOMAIN DATA (FREQUENCY/RAW/WINDOWED)] Filr Order: " + self.__numTotalSample + " Sampling Freq (Hz): " + (1.0 / self.__tiSample).ToString("F6") + " Cut-Off Freq Lo (Hz): " + self.__frqCutOffLo.ToString("F6") + " Cut-Off Freq Hi (Hz): " + self.__frqCutOffHi.ToString("F6") + "\n\n"
-                dataLst[0] = f"[FREQUENCY DOMAIN DATA (FREQUENCY/RAW/WINDOWED)]\n\nFilter Order: {int(self._txtFilterLength.get_text())}, Sampling Frequency: {1.0 / float(self._txtSampleTime.get_text())}Hz, Cut-Off Frequency Low: {float(self._txtLowFrequency.get_text())}Hz, Cut-Off Frequency High: {float(self._txtHighFrequency.get_text())}Hz\n\n"
+                data_list = [""] * 4
+                # dataLst[0] = "[FREQUENCY DOMAIN DATA (FREQUENCY/RAW/WINDOWED)] Filr Order: " + \
+                    # self._numTotalSample + " Sampling Freq (Hz): " + \
+                    # (1.0 / self._tiSample).ToString("F6") + \
+                    # " Cut-Off Freq Lo (Hz): " + self._frqCutOffLo.ToString("F6") + \
+                    # " Cut-Off Freq Hi (Hz): " + self._frqCutOffHi.ToString("F6") + "\n\n"
+                data_list[0] = (f"[FREQUENCY DOMAIN DATA (FREQUENCY/RAW/WINDOWED)]\n\n"
+                    f"Filter Order: {total_sample_num}, Sampling Frequency: {1.0 / ti_sample}"
+                    f"Hz, Cut-Off Frequency Low: {frq_cutoff_lo}Hz, Cut-Off Frequency High: "
+                    f"{frq_cutoff_hi}Hz\n\n")
 
-                dataLst[1] = f"Frequency Vecctor (Hz), {self.__freqVec[0]}"		# F6
-                dataLst[2] = f"Impulse Response Magnitude, {self.__impRespMag[0]}"		# F9
-                dataLst[3] = f"Window Response Magnitude, {self.__winRespMag[0]}" 	# F9
-                # for (int n = 1; n < NUM_FREQ_SAMPLES; n++):
-                for n in range(self.__numFreqSample):
-                    dataLst[1] += "," + str(self.__freqVec[n])			# F6
-                    dataLst[2] += "," + str(self.__impRespMag[n])    # F9
-                    dataLst[3] += "," + str(self.__winRespMag[n])    # F9
+                data_list[1] = f"Frequency Vecctor (Hz), {self._freq_vec[0]}"               # F6
+                data_list[2] = f"Impulse Response Magnitude, {self._imp_resp_mag[0]}"       # F9
+                data_list[3] = f"Window Response Magnitude, {self._win_resp_mag[0]}"        # F9
+                for n in range(self._freq_sample_num):
+                    data_list[1] += "," + str(self._freq_vec[n])        # F6
+                    data_list[2] += "," + str(self._imp_resp_mag[n])    # F9
+                    data_list[3] += "," + str(self._win_resp_mag[n])    # F9
 
-                dataLst[1] += "\n\n"
-                dataLst[2] += "\n\n"
+                data_list[1] += "\n\n"
+                data_list[2] += "\n\n"
 
-                # System.IO.File.WriteAllLines(saveFileDialog.FileName, data)
-                for data in dataLst:
+                for data in data_list:
                     _ = file.write(data)
-                # MessageBox.Show("Data written to file!", "Export Frequency Domain Data", MessageBoxButtons.OK, MessageBoxIcon.Information)
                 self.show_info(title, f"Data written to {r}")
 
 
 if __name__ == '__main__':
-    # root = tk.Tk()
-    app = FIRDesignerApp()
     cur_path = os.path.dirname(os.path.abspath(__file__))
     if getattr(sys, 'frozen', False):
         # print("script is packaged!")
         cur_path = os.path.dirname(os.path.abspath(sys.executable))
     proj_path = os.path.join(cur_path, "..")
     win_xml = os.path.join(proj_path, 'resources', 'window.xml')
-    app.create_window(win_xml)
-    menu_xml = os.path.join(proj_path, 'resources', 'menu.xml')
-    app.config_menu(menu_xml)
-    app.init_paras()
-    app.go()
+    my_app = FIRDesignerApp(proj_path, win_xml)
+    my_app.go()

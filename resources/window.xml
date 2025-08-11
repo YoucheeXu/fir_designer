@@ -12,7 +12,7 @@
 		</MenuItem>
 	</Menu>
 	<Frame text="Time Domain" layout="pack" pack='{"side":"top","fill":"both","expand":True,"padx":10,"pady":(10,5)}'>
-		<MatPlot text="Filter Response in Time Domain" size="(480,180)" xLabel="Time (s)" yLabel="" layout="pack" pack='{"side":"left","fill":"both","expand":True,"padx":(0,5),"pady":0}'/>
+		<MatPlot text="Filter Response in Time Domain" xLabel="Time (s)" yLabel="" layout="pack" pack='{"side":"left","fill":"both","expand":True,"padx":(0,5),"pady":0}'/>
 		<MatPlot text="Window Function in Time Domain" xLabel="Time (s)" yLabel="" layout="pack" pack='{"side":"left","fill":"both","expand":True,"padx":(5,0),"pady":0}'/>
 	</Frame>
 	<Frame text="Frequency Domain" layout ="pack" pack='{"side":"top","fill":"both","expand":True,"padx":10,"pady":(5,5)}'>

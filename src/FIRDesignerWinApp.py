@@ -4,9 +4,10 @@ import sys
 import os
 import math
 from enum import IntEnum, unique
-from typing import override, cast
+from typing import override, cast, Any
 
 import numpy as np
+from numpy.typing import ArrayLike
 from tkinter import filedialog as tkFileDialog
 # import tkinter as tk
 
@@ -70,9 +71,11 @@ class FIRDesignerApp(tkWin):
         self._txt_shift_samples.set_val("32")
         self._cmb_win_typ: ComboboxCtrl = cast(ComboboxCtrl, self.get_control("WindowType"))
         self._cmb_win_typ.set_val("Hamming")
-        self._rad_filt_typ: RadioButtonGroupCtrl = cast(RadioButtonGroupCtrl, self.get_control("FilterType"))
+        self._rad_filt_typ: RadioButtonGroupCtrl = cast(RadioButtonGroupCtrl,
+            self.get_control("FilterType"))
         self._rad_filt_typ.set_val(0)    # FilrType.LowPass
-        self._rad_resp_plot: RadioButtonGroupCtrl = cast(RadioButtonGroupCtrl, self.get_control("ResponsePlot"))
+        self._rad_resp_plot: RadioButtonGroupCtrl = cast(RadioButtonGroupCtrl,
+            self.get_control("ResponsePlot"))
         self._rad_resp_plot.set_val(0)    # Impulse
         self._cmb_display_typ: ComboboxCtrl = cast(ComboboxCtrl, self.get_control("DisplayType"))
         self._cmb_display_typ.set_val("Both")        
@@ -88,13 +91,21 @@ class FIRDesignerApp(tkWin):
 
         self._filter_resp_time_domain: MatPlotCtrl = \
             cast(MatPlotCtrl, self.get_control("FilterResponseinTimeDomain"))
+        self._id_imp_resp: int = -1
+        self._id_win_imp_resp: int = -1
+        self._id_stp_resp: int = -1
+        self._id_win_stp_resp: int = -1
         self._win_funct_time_domain: MatPlotCtrl = \
             cast(MatPlotCtrl, self.get_control("WindowFunctioninTimeDomain"))
+        self._id_win_funct_time_domain: int = -1
 
         self._filter_freq_resp: MatPlotCtrl = \
             cast(MatPlotCtrl, self.get_control("FilterFrequencyResponse"))
+        self._id_imp_resp_mag: int = -1
+        self._id_win_resp_mag: int = -1
         self._win_funct_freq_resp: MatPlotCtrl = \
             cast(MatPlotCtrl, self.get_control("WindowFunctionFrequencyResponse"))
+        self.id_win_funct_frq_resp: int = -1
 
         # Frequency Domain
         freq_sample_num = self._freq_sample_num
@@ -105,11 +116,11 @@ class FIRDesignerApp(tkWin):
 
     def _before_go(self):
         self._rad_filt_type_changed()
+        self._compute_win()
         self._design_filter()
 
     def _design_filter(self):
         self._compute_time_vec()
-        self._compute_win()
         self._compute_resps()
         self._compute_wind_resps()
 
@@ -120,38 +131,72 @@ class FIRDesignerApp(tkWin):
         self._update_charts()
         self._update_plot_settings()
 
+    def _update_line(self, mat: MatPlotCtrl, lid: int, data: ArrayLike,
+            options: dict[str, Any]):
+        if lid < 0:
+            yline = LineData(data, options)
+            return mat.add_line(yline)
+        else:
+            mat.update_ydata(lid, data)
+            return lid
+
     def _update_charts(self):
 
         self._filter_resp_time_domain.xdata = self._time_vec
-        y_line = LineData(self._impulse_resp, {"label": "Impulse Response"})
-        _ = self._filter_resp_time_domain.add_line(y_line)
-        y_line = LineData(self._wind_imp_resp, {"label": "Windowed Impulse Response"})
-        _ = self._filter_resp_time_domain.add_line(y_line)
-        y_line = LineData(self._step_resp, {"label": "Step Response"}, visible = False)
-        _ = self._filter_resp_time_domain.add_line(y_line)
-        y_line = LineData(self._wind_step_resp, {"label": "Windowed Step Response"}, visible = False)
-        _ = self._filter_resp_time_domain.add_line(y_line)
+        if self._id_imp_resp < 0:
+            y_line = LineData(self._impulse_resp, {"label": "Impulse Response"})
+            self._id_imp_resp = self._filter_resp_time_domain.add_line(y_line)
+        else:
+            self._filter_resp_time_domain.update_ydata(self._id_imp_resp, self._impulse_resp)
+        if self._id_win_imp_resp < 0:
+            y_line = LineData(self._wind_imp_resp, {"label": "Windowed Impulse Response"})
+            self._id_win_imp_resp = self._filter_resp_time_domain.add_line(y_line)
+        else:
+            self._filter_resp_time_domain.update_ydata(self._id_win_imp_resp, self._wind_imp_resp)
+        if self._id_stp_resp < 0:
+            y_line = LineData(self._step_resp, {"label": "Step Response"}, visible = False)
+            self._id_stp_resp = self._filter_resp_time_domain.add_line(y_line)
+        else:
+            self._filter_resp_time_domain.update_ydata(self._id_stp_resp, self._step_resp)
+        if self._id_win_stp_resp < 0:
+            y_line = LineData(self._wind_step_resp, {"label": "Windowed Step Response"},
+                visible = False)
+            self._id_win_stp_resp = self._filter_resp_time_domain.add_line(y_line)
+        else:
+             self._filter_resp_time_domain.update_ydata(self._id_win_stp_resp, self._wind_step_resp)
         self._filter_resp_time_domain.draw()
 
         self._win_funct_time_domain.xdata = self._time_vec
-        y_line = LineData(self._window)
-        _ = self._win_funct_time_domain.add_line(y_line)
+        # y_line = LineData(self._window)
+        # self._id_win_funct_time_domain = self._win_funct_time_domain.add_line(y_line)
+        self._id_win_funct_time_domain = self._update_line(self._win_funct_time_domain,
+            self._id_win_funct_time_domain, self._window, {})
         self._win_funct_time_domain.draw()
 
         self._filter_freq_resp.xdata = self._freq_vec
-        y_line = LineData(self._imp_resp_mag)
-        id_ = self._filter_freq_resp.add_line(y_line)
-        print(f"id of imp_resp_mag: {id_}")
+        # y_line = LineData(self._imp_resp_mag, {"label": "Impulse Response Magnitude"})
+        # self._id_imp_resp_mag = self._filter_freq_resp.add_line(y_line)
+        self._id_imp_resp_mag = self._update_line(self._filter_freq_resp,
+            self._id_imp_resp_mag, self._imp_resp_mag,
+            {"label": "Impulse Response Magnitude"})
+        print(f"id of imp_resp_mag: {self._id_imp_resp_mag}")
         print(f"length of _imp_resp_mag: {len(self._imp_resp_mag)}")
-        y_line = LineData(self._win_resp_mag)
-        id_ = self._filter_freq_resp.add_line(y_line)
-        print(f"id of _win_resp_mag: {id_}")
+        # y_line = LineData(self._win_resp_mag, {"label": "Windowed Response Magnitude"})
+        # self._id_win_resp_mag = self._filter_freq_resp.add_line(y_line)
+        self._id_win_resp_mag = self._update_line(self._filter_freq_resp,
+            self._id_win_resp_mag, self._win_resp_mag,
+            {"label": "Windowed Response Magnitude"})
+        print(f"id of _win_resp_mag: {self._id_win_resp_mag}")
         print(f"length of _win_resp_mag: {len(self._win_resp_mag)}")
         self._filter_freq_resp.draw()
 
         self._win_funct_freq_resp.xdata = self._freq_vec
-        y_line = LineData(self._win_mag)
-        _ = self._win_funct_freq_resp.add_line(y_line)
+        if self.id_win_funct_frq_resp < 0:
+            y_line = LineData(self._win_mag)
+            self.id_win_funct_frq_resp = self._win_funct_freq_resp.add_line(y_line)
+        else:
+            self._win_funct_freq_resp.update_ydata(self.id_win_funct_frq_resp,
+                self._win_mag)
         self._win_funct_freq_resp.draw()
 
     # Time Domain Functions
@@ -404,8 +449,8 @@ class FIRDesignerApp(tkWin):
         pv(total_sample_num)
         shft_sample_num = int(self._txt_shift_samples.get_val())
         pv(shft_sample_num)
-        win_typ = self._cmb_win_typ.get_val()
-        pv(win_typ)
+        self._win_typ = self._cmb_win_typ.get_val()
+        pv(self._win_typ)
         filt_typ = FilrType(self._rad_filt_typ.get_val())
         pv(filt_typ)
 
